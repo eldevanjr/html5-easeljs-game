@@ -1,0 +1,391 @@
+<html>
+<head>
+<title>HTML5 EaselJS Game</title>
+<meta content="" name="description">
+<meta content="width=device-width, initial-scale=1" name="viewport">
+<script src="lib/easeljs-NEXT.combined.js"></script>
+<style type="text/css" media="screen">
+canvas, img {
+	display: block;
+	margin: 1em auto;
+	border: 1px solid black;
+}
+
+canvas {
+	background: url(images/space.jpg);
+	opacity: 1;
+}
+</style>
+
+<script>
+	//register key functions
+	var KEYCODE_ENTER = 13; //useful keycode
+	var KEYCODE_SPACE = 32; //useful keycode
+	var KEYCODE_UP = 38; //useful keycode
+	var KEYCODE_LEFT = 37; //useful keycode
+	var KEYCODE_RIGHT = 39; //useful keycode
+	var KEYCODE_DOWN = 40;
+	var KEYCODE_W = 87; //useful keycode
+	var KEYCODE_A = 65; //useful keycode
+	var KEYCODE_D = 68; //useful keycode
+	
+	var DEFAULT_INCREASE = 15;
+
+	var SPEED_SUM_VALUE = 0.1; 
+	
+	var lifes = 3;
+	var score = 0;
+	
+	var messageField = "Lifes: "+lifes+ "Points: "+score;
+	
+	var scoreIncrease = 100;
+	
+	var manifest; // used to register sounds for preloading
+	var preload;
+
+	var lfHeld; //is the user holding a turn left command
+	var rtHeld; //is the user holding a turn right command
+	var dwHeld; //is the user holding a turn right command
+	var fwdHeld; //is the user holding a forward command
+
+	var canvas; //Main canvas
+	var stage; //Main display stage
+
+	var messageField; //Message display field
+	var scoreField; //score Field
+
+	var paused = false;
+
+	var loadingInterval = 0;
+	var img = new Image();
+	img.src = 'images/ball.png';
+	//create images
+	var circle = new createjs.Bitmap(img);
+	circle.setBounds(-32, -32, 64, 64);
+	var bar = new createjs.Shape();
+	//pause an play images
+	var pause = new Image();
+	pause.src = 'images/pause.png';
+	var pauseImg = new createjs.Bitmap(pause);
+
+	var play = new Image();
+	play.src = 'images/play.png';
+	var playImg = new createjs.Bitmap(play);
+	
+	var messageFieldStatus = new createjs.Text(messageField, "20px Arial center", "red");
+	
+	var increase = DEFAULT_INCREASE;
+	document.onkeydown = handleKeyDown;
+	document.onkeyup = handleKeyUp;
+	var stageWidth = 0;
+	var stageHei = 0;
+	var numberOfBlock = 52;
+	var barH = 50;
+	var barW = 15;
+	var holder;
+	
+	function init() {
+		//Create a stage by getting a reference to the canvas
+		canvas = document.getElementById("demoCanvas");
+		stage = new createjs.Stage(canvas);
+		holder = stage.addChild(new createjs.Container());
+		stageWidth = stage.canvas.width;
+		stageHei = stage.canvas.height;
+		createCircle(Math.floor((Math.random() * 100) + 1), Math.floor((Math
+				.random() * 100) + 1));
+
+		var i = 0;
+		var blockx = 50;
+		var blocky = 32;
+		stage.addChild(createTextStatus(lifes, score));
+		while (i <= numberOfBlock) {
+			holder.addChild(createBlock(blockx, blocky));
+			blockx += barH;
+			if (blockx >= stageWidth - 50) {
+				blockx = 50;
+				blocky += barW;
+			}
+			i++;
+		}
+		stage.update();
+		function toggleCache(value) {
+			// iterate all the children except the fpsLabel, and set up the cache:
+			var l = stage.getNumChildren() - 1;
+
+			for (var i = 0; i < l; i++) {
+				var shape = stage.getChildAt(i);
+				if (value) {
+					shape.cache(-20, -20, 40, 40);
+				} else {
+					shape.uncache();
+				}
+			}
+		}
+
+	}
+	
+	function createTextGameOver(){
+		var text = new createjs.Text("Game Over!", "70px Arial center", "red");
+		text.x = 600 - (text.getBounds().width / 2);
+		text.y = 400;
+		text.textBaseline = "alphabetic";
+		return text;
+	}
+	
+	
+	function createTextStatus(lifes, score){
+		messageField = "Lifes: "+lifes+ " Points: "+score;
+		messageFieldStatus.text = messageField;
+		messageFieldStatus.x = 0;
+		messageFieldStatus.y = 20;
+		messageFieldStatus.textBaseline = "alphabetic";
+		return messageFieldStatus;
+	}
+
+	function createBlock(x, y) {
+		var block = new createjs.Shape();
+		block.graphics.beginFill(
+				createjs.Graphics.getHSL(Math.random() * 360, 100, 50))
+				.drawRect(-25, 0, barH, barW);
+		block.x = x;
+		block.y = y;
+		return block;
+	}
+
+	function createCircle(x, y) {
+		//Set position of Shape instance.
+		circle.x = stageWidth / 2;
+		circle.y = stageHei - 64;
+		//Add Shape instance to stage display list.
+		stage.addChild(circle);
+		createjs.Ticker.timingMode = createjs.Ticker.RAF_SYNCHED;
+		pauseImg.x = playImg.x = stageWidth - 32;
+		pauseImg.y = playImg.y = 0;
+		stage.addChild(pauseImg);
+		createjs.Ticker.addEventListener("tick", handleTick);
+		var toleft = false;
+		var toup = true;
+
+		bar.graphics.beginFill("blue").drawRect(-50, 0, 100, 20);
+		bar.x = stageWidth / 2;
+		bar.y = stageHei - 20;
+		stage.addChild(bar);
+		function handleTick(event) {
+			if (!event.paused) {
+				var pt = circle.localToLocal(25, 25, bar);
+				if (bar.hitTest(pt.x, pt.y)) {
+					console.log('touch');
+					up();
+					toup = true;
+				}
+				if (circle.y >= stageHei || toup) {
+					up();
+					toup = true;
+					if (circle.y < 0) {
+						toup = false;
+					}
+				}
+				if (circle.x < stageWidth && !toleft) {
+					rigth();
+				}
+				if (circle.y < stageHei && !toup) {
+					down();
+				}
+				if (circle.x >= stageWidth || toleft) {
+					left();
+					toleft = true;
+					if (circle.x < 0) {
+						toleft = false;
+					}
+				}
+				if (circle.y >= stageHei) {
+					
+					reset();
+				}
+
+				if (lfHeld && bar.x - 100 >= 0) {
+					bar.x -= 50;
+				} else if (rtHeld && bar.x < stageWidth - 50) {
+					console.log(bar.x + 100);
+					bar.x += 50;
+				}
+
+				shootHeld = lfHeld = rtHeld = dwHeld = fwdHeld = false;
+				stage.update();
+
+			} else {
+				//TODO on pause.
+			}
+
+			var l = holder.getNumChildren();
+			var childs = [];
+			for (var i = 0; i < l; i++) {
+				var child = holder.getChildAt(i);
+				var pt = child.globalToLocal(circle.x, circle.y);
+				var toRemove = -1;
+				if (child.hitTest(pt.x, pt.y)) {
+					var rdm = Math.random() * 30;
+					console.log('rb'+rdm);
+					if(rdm>15){
+						toleft = !toleft;	
+					}else{
+						toup = !toup;
+					}
+					toleft = !toleft;
+					toup = !toup;
+					childs.push(i);
+				}
+			}
+			for (var i = 0; i < childs.length; i++) {
+				console.log('holder'+childs[i]);
+				holder.removeChildAt(childs[i]);
+				score+=scoreIncrease;
+				stage.addChild(createTextStatus(lifes, score));
+				stage.update(event);
+			}
+			
+			
+		}
+		function left() {
+			circle.x -= increase;
+
+		}
+		function rigth() {
+			circle.x += increase;
+		}
+
+		function up() {
+			circle.y -= increase;
+
+		}
+		function down() {
+			circle.y += increase;
+		}
+		increase +=SPEED_SUM_VALUE; 
+	}
+
+	function reset() {
+		if(lifes==1){
+			stage.addChild(createTextGameOver());
+			createjs.Ticker.setPaused(true);
+			stage.removeChild(pauseImg);
+			stage.removeChild(playImg);
+			lifes-=1;
+			stage.addChild(createTextStatus(lifes, score));
+		}else{
+			stage.removeAllChildren();
+			createjs.Ticker.removeAllEventListeners();
+			createCircle(Math.floor((Math.random() * 100) + 1), Math.floor((Math
+					.random() * 100) + 1), Math.floor((Math.random() * 30) + 1));
+			stage.addChild(holder); 
+			increase = DEFAULT_INCREASE;
+			lifes-=1;
+			stage.addChild(createTextStatus(lifes, score));
+		}
+		stage.update();
+	}
+	
+	var text = new createjs.Text("Paused", "50px Arial center", "red");
+	text.x = 600 - (text.getBounds().width / 2);
+	text.y = 400;
+	text.textBaseline = "alphabetic";
+
+	function togglePause(value) {
+		paused = !value;
+		if (paused) {
+			stage.addChild(text);
+			stage.addChild(playImg);
+			stage.removeChild(pauseImg);
+		} else {
+			stage.removeChild(playImg);
+			stage.addChild(pauseImg);
+			stage.removeChild(text);
+		}
+		createjs.Ticker.setPaused(paused);
+		stage.update();
+	}
+
+	playImg.addEventListener("click", handlePlayClick);
+
+	function handlePlayClick(event) {
+		togglePause(true);
+	}
+
+	pauseImg.addEventListener("click", handlePauseClick);
+
+	function handlePauseClick(event) {
+		togglePause(false);
+	}
+
+	//allow for WASD and arrow control scheme
+	function handleKeyDown(e) {
+		//cross browser issues exist
+		if (!e) {
+			var e = window.event;
+		}
+		switch (e.keyCode) {
+		case KEYCODE_SPACE:
+			togglePause(paused);
+			shootHeld = true;
+			return false;
+		case KEYCODE_A:
+		case KEYCODE_LEFT:
+			console.log('KEYCODE_LEFT');
+			lfHeld = true;
+			return false;
+		case KEYCODE_D:
+		case KEYCODE_RIGHT:
+			console.log('KEYCODE_RIGHT');
+			rtHeld = true;
+			return false;
+		case KEYCODE_W:
+		case KEYCODE_UP:
+			console.log('KEYCODE_UP');
+			fwdHeld = true;
+			return false;
+		case KEYCODE_DOWN:
+			console.log('KEYCODE_DOWN');
+			dwHeld = true;
+			return false;
+		case KEYCODE_ENTER:
+			if (canvas.onclick == handleClick) {
+				handleClick();
+			}
+			return false;
+		}
+	}
+
+	function handleKeyUp(e) {
+		//cross browser issues exist
+		if (!e) {
+			var e = window.event;
+		}
+		switch (e.keyCode) {
+		case KEYCODE_SPACE:
+			shootHeld = false;
+			break;
+		case KEYCODE_A:
+		case KEYCODE_LEFT:
+			lfHeld = false;
+			break;
+		case KEYCODE_D:
+		case KEYCODE_RIGHT:
+			rtHeld = false;
+			break;
+		case KEYCODE_W:
+		case KEYCODE_UP:
+			fwdHeld = false;
+			break;
+		}
+	}
+</script>
+</head>
+<body onload="init();">
+
+	<h1>Simple html5 game using <a href="http://www.createjs.com/docs/easeljs/modules/EaselJS.html"> EaselJS</a> and HTML5 canvas</h1>
+
+	<div>
+		<canvas id="demoCanvas" width="1200" height="800"></canvas>
+	</div>
+</body>
+</html>
